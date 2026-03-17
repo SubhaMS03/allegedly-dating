@@ -1,7 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ALL_INTERESTS } from '@/lib/mockData';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/context/AuthContext';
 
 interface ProfileData {
   name: string;
@@ -14,13 +16,37 @@ interface ProfileData {
 }
 
 export default function ProfileForm() {
+  const { user } = useAuth();
   const [saved, setSaved] = useState(false);
-  const [data, setData] = useState<ProfileData>(() => {
-    if (typeof window === 'undefined') return { name: '', age: '', gender: '', bio: '', interests: [], location: '', lookingFor: '' };
-    const stored = localStorage.getItem('allegedly_my_profile');
-    if (stored) return JSON.parse(stored);
-    return { name: '', age: '', gender: '', bio: '', interests: [], location: '', lookingFor: '' };
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<ProfileData>({
+    name: '', age: '', gender: '', bio: '', interests: [], location: '', lookingFor: '',
   });
+
+  useEffect(() => {
+    if (!user) { setLoading(false); return; }
+
+    supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+      .then(({ data: profile }) => {
+        if (profile) {
+          setData({
+            name: profile.name || '',
+            age: profile.age?.toString() || '',
+            gender: profile.gender || '',
+            bio: profile.bio || '',
+            interests: profile.interests || [],
+            location: profile.location || '',
+            lookingFor: profile.looking_for || '',
+          });
+        }
+        setLoading(false);
+      });
+  }, [user]);
 
   const update = (field: keyof ProfileData, value: string | string[]) => {
     setData(prev => ({ ...prev, [field]: value }));
@@ -34,16 +60,53 @@ export default function ProfileForm() {
     update('interests', next);
   };
 
-  const handleSave = () => {
-    localStorage.setItem('allegedly_my_profile', JSON.stringify(data));
+  const handleSave = async () => {
+    setSaving(true);
+
+    if (user) {
+      const { error } = await supabase.from('profiles').upsert({
+        id: user.id,
+        name: data.name,
+        age: parseInt(data.age) || null,
+        gender: data.gender,
+        bio: data.bio,
+        interests: data.interests,
+        location: data.location,
+        looking_for: data.lookingFor,
+        photos: [],
+        updated_at: new Date().toISOString(),
+      });
+
+      if (error) {
+        console.error('Error saving profile:', error);
+        setSaving(false);
+        return;
+      }
+    } else {
+      localStorage.setItem('allegedly_my_profile', JSON.stringify(data));
+    }
+
+    setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };
 
   const inputClass = "w-full px-4 py-3 border-2 border-black bg-white text-black font-mono text-sm placeholder:text-gray-400 outline-none focus:shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] transition-all";
 
+  if (loading) {
+    return <div className="py-20 text-center font-mono text-sm text-gray-400 uppercase tracking-widest">Loading...</div>;
+  }
+
   return (
     <div className="space-y-8">
+      {!user && (
+        <div className="border-2 border-black p-4 bg-gray-50">
+          <p className="text-xs font-bold uppercase tracking-wide text-gray-600 font-mono">
+            <a href="/auth/signup" className="underline">Create an account</a> to save your profile permanently.
+          </p>
+        </div>
+      )}
+
       {/* Name & Age */}
       <div className="grid sm:grid-cols-2 gap-5">
         <div>
@@ -164,13 +227,10 @@ export default function ProfileForm() {
       {/* Save */}
       <button
         onClick={handleSave}
-        className={`w-full py-3.5 font-black uppercase tracking-widest text-sm transition ${
-          saved
-            ? 'bg-black text-white'
-            : 'bg-black text-white hover:bg-gray-800'
-        }`}
+        disabled={saving}
+        className="w-full py-3.5 bg-black text-white font-black uppercase tracking-widest text-sm hover:bg-gray-800 transition disabled:opacity-50"
       >
-        {saved ? '// Profile Saved //' : 'Save Profile'}
+        {saving ? 'Saving...' : saved ? '// Profile Saved //' : 'Save Profile'}
       </button>
     </div>
   );
