@@ -11,7 +11,7 @@ export default function Home() {
       <section className="bg-black text-white border-b-2 border-black">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-16 sm:py-24">
           <p className="text-xs font-bold uppercase tracking-widest text-gray-500 mb-6">
-            Find your person — allegedly
+            [ allegedlydating ]
           </p>
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-black leading-tight">
             No games.<br />
